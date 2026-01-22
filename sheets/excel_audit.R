@@ -1025,6 +1025,8 @@ create_audit_workbook <- function(output_path,
                                   calculations_path = "utils/calculations.R",
                                   config_path = "utils/config.R",
                                   vac_payroll_mode = c("latest", "aligned"),
+                                  vacancies_mode = NULL,
+                                  payroll_mode = NULL,
                                   verbose = TRUE) {
 
   if (verbose) message("=== Creating Labour Market Stats Workbook ===")
@@ -1036,10 +1038,10 @@ create_audit_workbook <- function(output_path,
     source(config_path, local = calc_env)
   }
 
-  # Pass vacancies/payroll mode into calculations if requested
+  # Pass vacancies/payroll mode into calculations - separate modes take precedence
   vac_payroll_mode <- match.arg(vac_payroll_mode)
-  calc_env$vacancies_mode <- vac_payroll_mode
-  calc_env$payroll_mode <- vac_payroll_mode
+  calc_env$vacancies_mode <- if (!is.null(vacancies_mode)) vacancies_mode else vac_payroll_mode
+  calc_env$payroll_mode <- if (!is.null(payroll_mode)) payroll_mode else vac_payroll_mode
 
   if (file.exists(calculations_path)) {
     source(calculations_path, local = calc_env)

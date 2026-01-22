@@ -133,20 +133,27 @@ generate_word_output <- function(template_path = "utils/DB.docx",
                                  manual_month_override = NULL,
                                  manual_month_hr1_override = NULL,
                                  vac_payroll_mode_override = NULL,
+                                 vacancies_mode_override = NULL,
+                                 payroll_mode_override = NULL,
                                  verbose = TRUE) {
-  
+
   # Source config first
   source(config_path, local = FALSE)
-  
+
   if (!is.null(manual_month_override)) manual_month <<- tolower(manual_month_override)
   if (!is.null(manual_month_hr1_override)) manual_month_hr1 <<- tolower(manual_month_hr1_override)
 
-  # Optional: allow vacancies/payroll to be aligned with reference quarter (or latest)
-  if (!is.null(vac_payroll_mode_override)) {
-    mode <- tolower(as.character(vac_payroll_mode_override))
-    mode <- if (mode %in% c("latest", "aligned")) mode else "latest"
-    vacancies_mode <<- mode
-    payroll_mode <<- mode
+  # Handle vacancies/payroll modes - separate overrides take precedence
+  if (!is.null(vacancies_mode_override)) {
+    vacancies_mode <<- tolower(as.character(vacancies_mode_override))
+  } else if (!is.null(vac_payroll_mode_override)) {
+    vacancies_mode <<- tolower(as.character(vac_payroll_mode_override))
+  }
+
+  if (!is.null(payroll_mode_override)) {
+    payroll_mode <<- tolower(as.character(payroll_mode_override))
+  } else if (!is.null(vac_payroll_mode_override)) {
+    payroll_mode <<- tolower(as.character(vac_payroll_mode_override))
   }
   
   if (verbose && exists("manual_month", inherits = TRUE)) message("[word_output] manual_month = ", manual_month)

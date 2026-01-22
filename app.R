@@ -7,6 +7,8 @@
 
 library(shiny)
 library(lubridate)
+library(DBI)
+library(RPostgres)
 
 # ==============================================================================
 # UI - GOV.UK DESIGN SYSTEM
@@ -525,20 +527,70 @@ server <- function(input, output, session) {
             format(end_date, "%Y"))
   }
 
-  # Auto-load month from config on startup
-  observe({
-    if (file.exists(config_path)) {
-      tryCatch({
-        env <- new.env()
-        source(config_path, local = env)
-        if (exists("manual_month", envir = env)) {
-          auto_month(tolower(env$manual_month))
-        }
-      }, error = function(e) {
-        auto_month("dec2025")  # fallback
+  # Function to detect latest quarter from LFS data
+  detect_latest_quarter <- function() {
+    tryCatch({
+      conn <- DBI::dbConnect(RPostgres::Postgres())
+      on.exit(DBI::dbDisconnect(conn), add = TRUE)
+
+      # Fetch LFS data and find latest period
+      query <- 'SELECT DISTINCT time_period FROM "ons"."labour_market__age_group"'
+      result <- DBI::dbGetQuery(conn, query)
+
+      if (nrow(result) == 0) return(NULL)
+
+      # Parse periods like "Jul-Sep 2025" to get the end month
+      periods <- result$time_period
+      parsed <- lapply(periods, function(p) {
+        tryCatch({
+          # Pattern: "Mon-Mon YYYY" e.g., "Jul-Sep 2025"
+          parts <- strsplit(trimws(p), " ")[[1]]
+          if (length(parts) != 2) return(NULL)
+          year <- as.integer(parts[2])
+          months_part <- strsplit(parts[1], "-")[[1]]
+          if (length(months_part) != 2) return(NULL)
+          end_mon <- months_part[2]
+          m <- match(end_mon, month.abb)
+          if (is.na(m)) return(NULL)
+          as.Date(sprintf("%04d-%02d-01", year, m))
+        }, error = function(e) NULL)
       })
+
+      # Filter out NULLs and find max
+      valid_dates <- Filter(Negate(is.null), parsed)
+      if (length(valid_dates) == 0) return(NULL)
+
+      latest_end <- do.call(max, valid_dates)
+
+      # Convert to manual_month format: add 2 months to get the release month
+      release_month <- latest_end %m+% months(2)
+      tolower(format(release_month, "%b%Y"))
+    }, error = function(e) {
+      message("Failed to detect latest quarter: ", e$message)
+      NULL
+    })
+  }
+
+  # Auto-detect latest quarter from LFS data on startup
+  observe({
+    detected <- detect_latest_quarter()
+    if (!is.null(detected)) {
+      auto_month(detected)
     } else {
-      auto_month("dec2025")  # fallback
+      # Fallback to config.R if database unavailable
+      if (file.exists(config_path)) {
+        tryCatch({
+          env <- new.env()
+          source(config_path, local = env)
+          if (exists("manual_month", envir = env)) {
+            auto_month(tolower(env$manual_month))
+          }
+        }, error = function(e) {
+          auto_month("dec2025")
+        })
+      } else {
+        auto_month("dec2025")
+      }
     }
   })
 
@@ -879,7 +931,7 @@ server <- function(input, output, session) {
             summary_path = summary_path,
             top_ten_path = top_ten_path,
             manual_month_override = month_override,
-            vac_payroll_mode_override = vac_mode,
+            vacancies_mode_override = vac_mode,
             payroll_mode_override = payroll_mode_val,
             verbose = FALSE
           )
@@ -938,7 +990,7 @@ server <- function(input, output, session) {
             output_path = tmp_xlsx,
             calculations_path = calculations_path,
             config_path = config_path,
-            vac_payroll_mode = vac_mode,
+            vacancies_mode = vac_mode,
             payroll_mode = payroll_mode_val,
             verbose = FALSE
           )
