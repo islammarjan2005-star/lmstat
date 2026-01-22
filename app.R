@@ -562,6 +562,7 @@ server <- function(input, output, session) {
       period_label <- make_lfs_label_local(quarter_end)
 
       div(
+        span(style = "font-size: 19px;", "The latest quarter is "),
         span(style = "font-weight: 600; font-size: 19px;", period_label)
       )
     }, error = function(e) {
